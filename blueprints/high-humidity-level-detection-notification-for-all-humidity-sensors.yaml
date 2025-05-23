@@ -1,14 +1,14 @@
 blueprint:
   name: Humidity Notifications & Actions
   description: >
-    💧 High Humidity Notifications & Actions
+    💧 High Humidity Notifications & Actions  
     This blueprint checks the humidity level each hour and sends notifications if the humidity exceeds a configured threshold. Optionally, it can run additional custom actions.
   domain: automation
   input:
     humidity_sensor:
       name: Humidity Sensor
       description: >
-        The humidity sensor entity to monitor (e.g. a hygrometer).
+        The humidity sensor entity to monitor (e.g., a hygrometer).
       selector:
         entity:
           domain: sensor
@@ -56,12 +56,10 @@ blueprint:
         Specify custom actions to be performed when humidity exceeds the threshold.
       selector:
         action:
-  mode: single
 
 trigger:
   - platform: time
-    hours: "*"
-    minutes: 0
+    at: "00:00:00"  # Runs hourly at midnight. Change to "*" for every hour but ensure no typo.
 
 condition:
   - condition: template
@@ -71,14 +69,15 @@ action:
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ notify_target is defined and notify_target | length > 0 }}"
+            value_template: "{{ !input notify_target is not none and !input notify_target | length > 0 }}"
         sequence:
           - service: notify
             target: !input notify_target
             data:
               title: !input notification_title
               message: !input notification_message
+
       - conditions:
           - condition: template
-            value_template: "{{ include_custom_actions }}"
+            value_template: "{{ !input include_custom_actions }}"
         sequence: !input custom_actions
