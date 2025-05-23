@@ -5,202 +5,151 @@ blueprint:
 
     Monitors all humidity sensors and sends notifications or runs actions when a threshold is exceeded.
 
-    - Supports button and time triggers.
-    - Exclude specific sensors.
+    - Supports time-based trigger.
+    - Allows excluding specific humidity sensors.
     - Sends notifications to selected mobile devices.
-    - Optionally run custom actions.
+    - Supports optional custom actions.
 
   domain: automation
 
   input:
-    trigger_settings:
-      name: "Triggers"
-      icon: mdi:cog-outline
-      description: >
-        Select how to trigger the humidity check.
-      collapsed: true
-      input:
-        include_button:
-          name: Use Button Helper Trigger (Optional)
-          description: >
-            Select if you want a button helper to trigger the automation.
-          default: disable_button_trigger
-          selector:
-            select:
-              options:
-                - label: Use a button trigger
-                  value: "enable_button_trigger"
-                - label: Don't use a button trigger
-                  value: "disable_button_trigger"
-        button_entity:
-          name: Button Helper
-          description: >
-            Input your button helper.
-          default: []
-          selector:
-            entity:
-              filter:
-                domain: input_button
-        include_time:
-          name: Use Time Trigger (Optional)
-          description: >
-            Select if you want to use the time trigger.
-          default: time_enabled
-          selector:
-            select:
-              options:
-                - label: Enable the time options
-                  value: "time_enabled"
-                - label: Disable the time options
-                  value: "time_disabled"
+    include_time:
+      name: Use Time Trigger
+      description: Enable or disable the time trigger
+      default: time_enabled
+      selector:
+        select:
+          options:
+            - label: Enable time trigger
+              value: time_enabled
+            - label: Disable time trigger
+              value: time_disabled
+
+    time:
+      name: Time
+      description: Time of day to run the automation (if enabled)
+      default: '10:00:00'
+      selector:
         time:
-          name: Time
-          description: >
-            Set the time you would like to run the automation.
-          default: '10:00:00'
-          selector:
-            time:
-        weekday_options:
-          name: Weekdays
-          description: >
-            Select the days of the week you would like the automation to run.
-          default:
-            - mon
-            - tue
-            - wed
-            - thu
-            - fri
-            - sat
-            - sun
-          selector:
-            select:
-              multiple: true
-              mode: list
-              options:
-                - label: Monday
-                  value: "mon"
-                - label: Tuesday
-                  value: "tue"
-                - label: Wednesday
-                  value: "wed"
-                - label: Thursday
-                  value: "thu"
-                - label: Friday
-                  value: "fri"
-                - label: Saturday
-                  value: "sat"
-                - label: Sunday
-                  value: "sun"
-    humidity_settings:
-      name: "Humidity Settings"
-      icon: mdi:water-percent
-      collapsed: true
-      input:
-        threshold:
-          name: Humidity Threshold (%)
-          description: >
-            Set the humidity percentage to trigger the alert.
-          default: 65
-          selector:
-            number:
-              min: 5
-              max: 100
-              step: 1
-              unit_of_measurement: '%'
-        exclude_sensors:
-          name: Excluded Humidity Sensors (Optional)
-          description: >
-            Choose the humidity sensors to be excluded when the automation runs.
-          default: { entity_id: [] }
-          selector:
-            target:
-              entity:
-                device_class: humidity
-    notify_settings:
-      name: "Notification & Actions"
-      icon: mdi:bell-check-outline
-      collapsed: true
-      input:
-        notify_device:
-          name: Devices to Notify (Optional)
-          description: >
-            Select the devices to receive notifications.
-          default: []
-          selector:
-            device:
-              filter:
-                - integration: mobile_app
-              multiple: true
-        notify_title:
-          name: Title
-          description: >
-            Enter the notification title.
-          default: High Humidity Alert
-          selector:
-            text:
-        notify_message:
-          name: Message
-          description: >
-            Enter the notification message. Use {{sensors}} for the list of sensors.
-          default: >
-            High humidity detected in: {{sensors}}
-          selector:
-            text:
-        actions:
-          name: Actions to Execute (Optional)
-          description: >
-            Optional actions to run when humidity is high.
-          default: []
-          selector:
-            action: {}
+
+    weekday_options:
+      name: Days of Week
+      description: Days to run the automation
+      default:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        - sat
+        - sun
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - label: Monday
+              value: mon
+            - label: Tuesday
+              value: tue
+            - label: Wednesday
+              value: wed
+            - label: Thursday
+              value: thu
+            - label: Friday
+              value: fri
+            - label: Saturday
+              value: sat
+            - label: Sunday
+              value: sun
+
+    threshold:
+      name: Humidity Threshold (%)
+      description: Alert when humidity exceeds this percentage
+      default: 65
+      selector:
+        number:
+          min: 5
+          max: 100
+          step: 1
+          unit_of_measurement: '%'
+
+    exclude_sensors:
+      name: Excluded Humidity Sensors
+      description: Sensors to exclude from monitoring
+      default: []
+      selector:
+        target:
+          entity:
+            domain: sensor
+            device_class: humidity
+            multiple: true
+
+    notify_device:
+      name: Devices to Notify
+      description: Mobile devices to send notifications to
+      default: []
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+
+    notify_title:
+      name: Notification Title
+      description: Title of the notification message
+      default: High Humidity Alert
+      selector:
+        text:
+
+    notify_message:
+      name: Notification Message
+      description: Message content; use {{sensors}} to include sensor list
+      default: High humidity detected in: {{sensors}}
+      selector:
+        text:
+
+    actions:
+      name: Actions to Execute
+      description: Optional actions to run when humidity is high
+      default: []
+      selector:
+        action: {}
 
 variables:
-  threshold: !input humidity_settings.threshold
-  exclude_sensors: !input humidity_settings.exclude_sensors
-  days: !input trigger_settings.weekday_options
+  threshold: !input threshold
+  exclude_sensors: !input exclude_sensors
+  days: !input weekday_options
   sensors: >
     {% set ns = namespace(list=[]) %}
     {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
-      {% if s.entity_id not in exclude_sensors.entity_id and s.state | float(-1) > threshold %}
+      {% if s.entity_id not in exclude_sensors and s.state | float(-1) > threshold %}
         {% set ns.list = ns.list + [s.name ~ ' (' ~ s.state ~ '%)'] %}
       {% endif %}
     {% endfor %}
-    {{ ns.list | join(', ') }}
+    {{ ns.list }}
 
 trigger:
-  - platform: template
-    value_template: >
-      {{ (trigger_settings.include_button == 'enable_button_trigger')
-         and (trigger_settings.button_entity != []) }}
-    id: button
   - platform: time
-    at: !input trigger_settings.time
-    id: time
+    at: !input time
 
 condition:
   - condition: template
     value_template: "{{ sensors | length > 0 }}"
   - condition: template
-    value_template: >
-      {{ now().strftime('%a').lower()[:3] in days }}
+    value_template: "{{ now().strftime('%a').lower()[:3] in days }}"
 
 action:
+  - service: notify.mobile_app
+    data:
+      target: !input notify_device
+      title: !input notify_title
+      message: >
+        {{ !input notify_message | replace('{{sensors}}', sensors) }}
+
   - choose:
       - conditions:
           - condition: template
-            value_template: >
-              {{ notify_settings.notify_device | length > 0 }}
-        sequence:
-          - service: notify.mobile_app
-            data:
-              target: !input notify_settings.notify_device
-              title: !input notify_settings.notify_title
-              message: >
-                {{ !input notify_settings.notify_message | replace('{{sensors}}', sensors) }}
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ notify_settings.actions | length > 0 }}"
-        sequence: !input notify_settings.actions
+            value_template: "{{ actions | length > 0 }}"
+        sequence: !input actions
 
 mode: single
