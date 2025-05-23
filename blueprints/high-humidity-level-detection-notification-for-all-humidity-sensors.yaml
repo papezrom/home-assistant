@@ -1,155 +1,90 @@
-blueprint:
-  name: High Humidity Notifications & Actions
+ blueprint:
+  name: Humidity Notifications & Actions
   description: >
-    # 💧 High Humidity Notifications & Actions
-
-    Monitors all humidity sensors and sends notifications or runs actions when a threshold is exceeded.
-
-    - Supports time-based trigger.
-    - Allows excluding specific humidity sensors.
-    - Sends notifications to selected mobile devices.
-    - Supports optional custom actions.
-
+    💧 High Humidity Notifications & Actions
+    This blueprint checks the humidity level each hour and sends notifications if the humidity exceeds a configured threshold. Optionally, it can run additional custom actions.
   domain: automation
-
   input:
-    include_time:
-      name: Use Time Trigger
-      description: Enable or disable the time trigger
-      default: time_enabled
+    humidity_sensor:
+      name: Humidity Sensor
+      description: >
+        The humidity sensor entity to monitor (e.g. a hygrometer).
       selector:
-        select:
-          options:
-            - label: Enable time trigger
-              value: time_enabled
-            - label: Disable time trigger
-              value: time_disabled
-
-    time:
-      name: Time
-      description: Time of day to run the automation (if enabled)
-      default: '10:00:00'
-      selector:
-        time:
-
-    weekday_options:
-      name: Days of Week
-      description: Days to run the automation
-      default:
-        - mon
-        - tue
-        - wed
-        - thu
-        - fri
-        - sat
-        - sun
-      selector:
-        select:
-          multiple: true
-          mode: list
-          options:
-            - label: Monday
-              value: mon
-            - label: Tuesday
-              value: tue
-            - label: Wednesday
-              value: wed
-            - label: Thursday
-              value: thu
-            - label: Friday
-              value: fri
-            - label: Saturday
-              value: sat
-            - label: Sunday
-              value: sun
-
-    threshold:
-      name: Humidity Threshold (%)
-      description: Alert when humidity exceeds this percentage
-      default: 65
+        entity:
+          domain: sensor
+          device_class: humidity
+    humidity_threshold:
+      name: Humidity Threshold
+      description: >
+        Send a notification when the humidity exceeds this percentage value.
+      default: 70
       selector:
         number:
-          min: 5
+          min: 1
           max: 100
-          step: 1
-          unit_of_measurement: '%'
-
-    exclude_sensors:
-      name: Excluded Humidity Sensors
-      description: Sensors to exclude from monitoring
-      default: []
+          unit_of_measurement: "%"
+    notification_title:
+      name: Notification Title
+      description: >
+        Title for the notification.
+      default: "High Humidity Warning"
+      selector:
+        text:
+    notification_message:
+      name: Notification Message
+      description: >
+        Message for the notification.
+      default: "The humidity level is too high!"
+      selector:
+        text:
+    notify_target:
+      name: Notification Target (Optional)
+      description: >
+        Select devices or services to receive the notification. If left empty, no notification will be sent.
       selector:
         target:
-          entity:
-            domain: sensor
-            device_class: humidity
-            multiple: true
-
-    notify_device:
-      name: Devices to Notify
-      description: Mobile devices to send notifications to
-      default: []
+    include_custom_actions:
+      name: Include Custom Actions (Optional)
+      description: >
+        Enable custom actions to be triggered if the humidity exceeds the threshold.
+      default: false
       selector:
-        device:
-          integration: mobile_app
-          multiple: true
-
-    notify_title:
-      name: Notification Title
-      description: Title of the notification message
-      default: High Humidity Alert
+        boolean:
+    custom_actions:
+      name: Custom Actions (Optional)
+      description: >
+        Specify custom actions to be performed when humidity exceeds the threshold.
       selector:
-        text:
+        action:
+  mode: single
 
-    notify_message:
-      name: Notification Message
-      description: Message content; use {{sensors}} to include sensor list
-      default: High humidity detected in: {{sensors}}
-      selector:
-        text:
-
-    actions:
-      name: Actions to Execute
-      description: Optional actions to run when humidity is high
-      default: []
-      selector:
-        action: {}
-
-variables:
-  threshold: !input threshold
-  exclude_sensors: !input exclude_sensors
-  days: !input weekday_options
-  sensors: >
-    {% set ns = namespace(list=[]) %}
-    {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
-      {% if s.entity_id not in exclude_sensors and s.state | float(-1) > threshold %}
-        {% set ns.list = ns.list + [s.name ~ ' (' ~ s.state ~ '%)'] %}
-      {% endif %}
-    {% endfor %}
-    {{ ns.list }}
-
+# Automation Trigger: Runs hourly and checks humidity levels
 trigger:
   - platform: time
-    at: !input time
+    hours: "*"
+    minutes: 0
 
+# Conditions: Ensures the humidity exceeds the specified threshold
 condition:
   - condition: template
-    value_template: "{{ sensors | length > 0 }}"
-  - condition: template
-    value_template: "{{ now().strftime('%a').lower()[:3] in days }}"
+    value_template: "{{ states(input.humidity_sensor) | float > input.humidity_threshold }}"
 
+# Actions: Send the notification and perform optional actions
 action:
-  - service: notify.mobile_app
-    data:
-      target: !input notify_device
-      title: !input notify_title
-      message: >
-        {{ !input notify_message | replace('{{sensors}}', sensors) }}
-
   - choose:
+      # Send a notification if a target is specified
       - conditions:
           - condition: template
-            value_template: "{{ actions | length > 0 }}"
-        sequence: !input actions
+            value_template: "{{ notify_target is defined and notify_target | length > 0 }}"
+        sequence:
+          - service: notify
+            target: !input notify_target
+            data:
+              title: !input notification_title
+              message: !input notification_message
 
-mode: single
+      # Perform custom actions if enabled
+      - conditions:
+          - condition: template
+            value_template: "{{ include_custom_actions }}"
+        sequence: !input custom_actions
