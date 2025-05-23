@@ -59,18 +59,15 @@ blueprint:
   mode: single
 
 trigger:
-  # Runs hourly and checks humidity levels
   - platform: time
     hours: "*"
     minutes: 0
 
 condition:
-  # Ensures the humidity exceeds the specified threshold
   - condition: template
     value_template: "{{ states(!input humidity_sensor) | float > !input humidity_threshold }}"
 
 action:
-  # Choose to send notifications or perform custom actions
   - choose:
       - conditions:
           - condition: template
