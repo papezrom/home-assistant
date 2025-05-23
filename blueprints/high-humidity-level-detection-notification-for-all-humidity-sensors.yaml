@@ -1,6 +1,6 @@
 blueprint:
   name: Advanced Humidity Alert & Automation
-  description: Monitors humidity sensors, sends notifications when thresholds are exceeded, and executes conditional actions. Supports recurring checks, smart filtering, and rich notifications.
+  description: Monitors humidity sensors and triggers actions
   domain: automation
   input:
     threshold:
@@ -13,43 +13,32 @@ blueprint:
           max: 100
           unit_of_measurement: '%'
           mode: slider
-          step: 1  # More precise control
-    frequency:
-      name: Check Frequency
-      description: How often to verify humidity levels
-      default: "10:00:00"
-      selector:
-        select:
-          options:
-            - "00:00:00"
-            - "01:00:00"
-            - "06:00:00"
-            - "10:00:00"
-            - "once_daily"
-            - state  # Add trigger on state changes
+          step: 1
+
     days:
       name: Activation Days
       description: 0=Daily, 1=Mon...7=Sun
-      default: 0
+      default: '0'
       selector:
         select:
           options:
             - label: Daily
-              value: 0
+              value: '0'
             - label: Monday
-              value: 1
+              value: '1'
             - label: Tuesday
-              value: 2
+              value: '2'
             - label: Wednesday
-              value: 3
+              value: '3'
             - label: Thursday
-              value: 4
+              value: '4'
             - label: Friday
-              value: 5
+              value: '5'
             - label: Saturday
-              value: 6
+              value: '6'
             - label: Sunday
-              value: 7
+              value: '7'
+
     exclude:
       name: Excluded Targets
       description: Exclude sensors/areas/devices
@@ -63,21 +52,10 @@ blueprint:
               - "Aqara"
               - "Shelly"
           area: {}
-    notifications:
-      name: Notification Channels
-      description: Where to send alerts
-      selector:
-        select:
-          multiple: true
-          options:
-            - mobile_app
-            - email
-            - telegram
-            - alexa
+
     actions:
       name: Remediation Actions
       description: Optional actions (e.g., activate dehumidifier)
-      required: false
       selector:
         action: {}
 
@@ -86,15 +64,13 @@ variables:
     {% set ns = namespace(results=[]) %}
     {% for s in states.sensor 
       | selectattr('attributes.device_class', 'eq', 'humidity')
-      | rejectattr('entity_id', 'in', exclude.entity_id)
-      | rejectattr('state', 'in', ['unavailable', 'unknown', 'none']) %}
+      | rejectattr('entity_id', 'in', exclude.entity_id or []) %}
       
-      {% set value = s.state | float(default=0) %}
+      {% set value = s.state | float(default=-1) %}
       {% if value >= threshold %}
         {% set ns.results = ns.results + [{
           'name': s.name,
           'value': value | round(1),
-          'area': s.attributes.area_name,
           'entity': s.entity_id
         }] %}
       {% endif %}
@@ -103,52 +79,27 @@ variables:
 
 trigger:
   - platform: time_pattern
-    hours: /{{ frequency.split(':')[0] }}
-    minutes: /{{ frequency.split(':')[1] }}
-  - platform: state
-    entity_id: sensor.all_humidity_sensors  # Requires sensor template
+    hours: "/3"  # Check every 3 hours
 
 condition:
-  - "{{ (days == 0) or (now().isoweekday() == days) }}"
+  - "{{ (days == '0') or (now().isoweekday() | string == days) }}"
   - "{{ valid_sensors | length > 0 }}"
 
 action:
   - choose:
       - conditions: "{{ 'mobile_app' in notifications }}"
         sequence:
-          - service: notify.mobile_app_<device>
+          - service: notify.mobile_app
             data:
-              title: "High Humidity Detected"
-              message: >
-                {{ valid_sensors | map(attribute='name') | list | join(', ') }}
-                in {{ valid_sensors | map(attribute='area') | unique | list | join(', ') }}
-              data:
-                importance: high
-                channel: alerts
-                image: /local/humidity-alert.png
-
-      - conditions: "{{ 'email' in notifications }}"
-        sequence:
-          - service: notify.email
-            data:
-              title: "Humidity Alert Report"
-              message: >
-                {% for s in valid_sensors %}
-                - {{ s.name }} ({{ s.value }}%) in {{ s.area }}
-                {% endfor %}
+              title: "High Humidity Alert"
+              message: "Sensors: {{ valid_sensors | map(attribute='name') | join(', ') }}"
 
     default: []
 
   - if: "{{ actions is defined }}"
     then:
-      - variables:
-          affected_entities: "{{ valid_sensors | map(attribute='entity') | list }}"
       - service: script.turn_on
         target:
           entity_id: "{{ actions }}"
-        data:
-          variables:
-            sensors: "{{ affected_entities }}"
 
-mode: queued  # Better for multiple triggers
-max: 10  # Prevent queue overload
+mode: queued
