@@ -1,22 +1,14 @@
 blueprint:
-  name: Humidity Notifications & Actions
+  name: High Humidity Monitor
   description: >
-    💧 High Humidity Notifications & Actions  
-    This blueprint checks the humidity level each hour and sends notifications if the humidity exceeds a configured threshold. Optionally, it can run additional custom actions.
+    💧 High Humidity Monitor  
+    This blueprint checks all humidity sensors every hour and sends notifications if the humidity of any sensor exceeds a configured threshold. Optionally, it can perform custom actions.
   domain: automation
   input:
-    humidity_sensor:
-      name: Humidity Sensor
-      description: >
-        The humidity sensor entity to monitor (e.g., a hygrometer).
-      selector:
-        entity:
-          domain: sensor
-          device_class: humidity
     humidity_threshold:
       name: Humidity Threshold
       description: >
-        Send a notification when the humidity exceeds this percentage value.
+        Notifications are sent if the humidity exceeds this value.
       default: 70
       selector:
         number:
@@ -27,14 +19,14 @@ blueprint:
       name: Notification Title
       description: >
         Title for the notification.
-      default: "High Humidity Warning"
+      default: "High Humidity Detected"
       selector:
         text:
     notification_message:
       name: Notification Message
       description: >
         Message for the notification.
-      default: "The humidity level is too high!"
+      default: "One or more areas in your home have high humidity levels."
       selector:
         text:
     notify_target:
@@ -43,41 +35,37 @@ blueprint:
         Select devices or services to receive the notification. If left empty, no notification will be sent.
       selector:
         target:
-    include_custom_actions:
-      name: Include Custom Actions (Optional)
-      description: >
-        Enable custom actions to be triggered if the humidity exceeds the threshold.
-      default: false
-      selector:
-        boolean:
     custom_actions:
       name: Custom Actions (Optional)
       description: >
-        Specify custom actions to be performed when humidity exceeds the threshold.
+        Specify additional actions to execute when humidity exceeds the threshold.
       selector:
         action:
 
 trigger:
   - platform: time
-    at: "00:00:00"  # Runs hourly at midnight. Change to "*" for every hour but ensure no typo.
+    at: "00:00"
 
 condition:
   - condition: template
-    value_template: "{{ states(!input humidity_sensor) | float > !input humidity_threshold }}"
+    value_template: >
+      {% set high_humidity = states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') | selectattr('state', 'defined') | selectattr('state', '>', !input humidity_threshold | float) | list %}
+      {{ high_humidity | length > 0 }}
 
 action:
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ !input notify_target is not none and !input notify_target | length > 0 }}"
+            value_template: >
+              {% set high_humidity = states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') | selectattr('state', 'defined') | selectattr('state', '>', !input humidity_threshold | float) | list %}
+              {{ high_humidity | length > 0 }}
         sequence:
           - service: notify
             target: !input notify_target
             data:
               title: !input notification_title
-              message: !input notification_message
-
-      - conditions:
-          - condition: template
-            value_template: "{{ !input include_custom_actions }}"
-        sequence: !input custom_actions
+              message: >
+                {% set high_humidity = states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') | selectattr('state', 'defined') | selectattr('state', '>', !input humidity_threshold | float) | list %}
+                High humidity detected for sensors: 
+                {{ high_humidity | map(attribute='name') | join(', ') }}
+  - sequence: !input custom_actions
