@@ -101,14 +101,4 @@ condition:
 action:
   - service: notify.mobile_app
     data:
-      target: !input notify_device
-      message: >
-        High humidity detected in: 
-        {% for s in sensors %}
-          {{ state_attr(s, 'friendly_name') }} ({{ states(s) }}%)
-        {% endfor %}
-  - choose:
-      - conditions: "{{ actions is defined and actions|length > 0 }}"
-        sequence: !input actions
-
-mode: single
+      target
