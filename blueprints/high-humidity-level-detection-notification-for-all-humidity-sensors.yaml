@@ -1,21 +1,9 @@
 blueprint:
   name: High Humidity Notifications & Actions
   description: >
-    # 💧 High Humidity Notifications & Actions
-
     Monitors all humidity sensors and sends notifications or runs actions when a threshold is exceeded.
   domain: automation
   input:
-    include_time:
-      name: Use Time Trigger
-      default: time_enabled
-      selector:
-        select:
-          options:
-            - label: Enable time trigger
-              value: "time_enabled"
-            - label: Disable time trigger
-              value: "time_disabled"
     time:
       name: Time
       default: "10:00:00"
@@ -83,6 +71,8 @@ blueprint:
 variables:
   threshold: !input threshold
   exclude_sensors: !input exclude_sensors
+  days: !input days
+  actions: !input actions
   sensors: >
     {% set ns = namespace(list=[]) %}
     {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
@@ -97,8 +87,10 @@ trigger:
     at: !input time
 
 condition:
-  - "{{ sensors | length > 0 }}"
-  - "{{ now().strftime('%a').lower() in !input days }}"
+  - condition: template
+    value_template: "{{ sensors | length > 0 }}"
+  - condition: template
+    value_template: "{{ now().strftime('%a').lower() in days }}"
 
 action:
   - service: notify.mobile_app
@@ -110,7 +102,9 @@ action:
           {{ state_attr(s, 'friendly_name') }} ({{ states(s) }}%)
         {% endfor %}
   - choose:
-      - conditions: "{{ !input actions is defined and !input actions | length > 0 }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ actions | length > 0 }}"
         sequence: !input actions
 
 mode: single
