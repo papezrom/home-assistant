@@ -6,96 +6,85 @@ blueprint:
     Monitors all humidity sensors and sends notifications or runs actions when a threshold is exceeded.
   domain: automation
   input:
-    trigger_settings:
-      name: "Triggers"
-      description: "Select how and when to check humidity."
-      input:
-        include_time:
-          name: Use Time Trigger
-          default: time_enabled
-          selector:
-            select:
-              options:
-                - label: Enable time trigger
-                  value: "time_enabled"
-                - label: Disable time trigger
-                  value: "time_disabled"
+    include_time:
+      name: Use Time Trigger
+      default: time_enabled
+      selector:
+        select:
+          options:
+            - label: Enable time trigger
+              value: "time_enabled"
+            - label: Disable time trigger
+              value: "time_disabled"
+    time:
+      name: Time
+      default: "10:00:00"
+      selector:
         time:
-          name: Time
-          default: '10:00:00'
-          selector:
-            time:
-        days:
-          name: Days of Week
-          default:
-            - mon
-            - tue
-            - wed
-            - thu
-            - fri
-            - sat
-            - sun
-          selector:
-            select:
-              multiple: true
-              mode: list
-              options:
-                - label: Monday
-                  value: "mon"
-                - label: Tuesday
-                  value: "tue"
-                - label: Wednesday
-                  value: "wed"
-                - label: Thursday
-                  value: "thu"
-                - label: Friday
-                  value: "fri"
-                - label: Saturday
-                  value: "sat"
-                - label: Sunday
-                  value: "sun"
-    humidity_settings:
-      name: "Humidity Settings"
-      description: "Configure humidity detection."
-      input:
-        threshold:
-          name: Humidity Threshold (%)
-          default: 65
-          selector:
-            number:
-              min: 5
-              max: 100
-              step: 1
-              unit_of_measurement: '%'
-        exclude_sensors:
-          name: Excluded Sensors
-          default: { entity_id: [] }
-          selector:
-            target:
-              entity:
-                device_class: humidity
-    notify_settings:
-      name: "Notification & Actions"
-      description: "Configure what happens when high humidity is detected."
-      input:
-        notify_device:
-          name: Devices to Notify
-          default: []
-          selector:
-            device:
-              integration: mobile_app
-              multiple: true
-        actions:
-          name: Actions to Execute
-          default: []
-          selector:
-            action: {}
+    days:
+      name: Days of Week
+      default:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        - sat
+        - sun
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - label: Monday
+              value: "mon"
+            - label: Tuesday
+              value: "tue"
+            - label: Wednesday
+              value: "wed"
+            - label: Thursday
+              value: "thu"
+            - label: Friday
+              value: "fri"
+            - label: Saturday
+              value: "sat"
+            - label: Sunday
+              value: "sun"
+    threshold:
+      name: Humidity Threshold (%)
+      default: 65
+      selector:
+        number:
+          min: 5
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    exclude_sensors:
+      name: Excluded Sensors
+      default: []
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+          multiple: true
+    notify_device:
+      name: Devices to Notify
+      default: []
+      selector:
+        device:
+          integration: mobile_app
+          multiple: true
+    actions:
+      name: Actions to Execute
+      default: []
+      selector:
+        action: {}
 
 variables:
   sensors: >
     {% set ns = namespace(list=[]) %}
     {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
-      {% if s.entity_id not in humidity_settings.exclude_sensors.entity_id and s.state|float(-1) > humidity_settings.threshold %}
+      {% if s.entity_id not in exclude_sensors and s.state|float(-1) > threshold %}
         {% set ns.list = ns.list + [s.entity_id] %}
       {% endif %}
     {% endfor %}
@@ -103,22 +92,23 @@ variables:
 
 trigger:
   - platform: time
-    at: !input trigger_settings.time
+    at: !input time
 
 condition:
   - "{{ sensors | length > 0 }}"
-  - "{{ now().strftime('%a').lower() in trigger_settings.days }}"
+  - "{{ now().strftime('%a').lower() in days }}"
 
 action:
   - service: notify.mobile_app
     data:
+      target: !input notify_device
       message: >
         High humidity detected in: 
         {% for s in sensors %}
           {{ state_attr(s, 'friendly_name') }} ({{ states(s) }}%)
         {% endfor %}
   - choose:
-      - conditions: "{{ notify_settings.actions is defined and notify_settings.actions|length > 0 }}"
-        sequence: !input notify_settings.actions
+      - conditions: "{{ actions is defined and actions|length > 0 }}"
+        sequence: !input actions
 
 mode: single
