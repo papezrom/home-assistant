@@ -1,4 +1,4 @@
- blueprint:
+blueprint:
   name: Humidity Notifications & Actions
   description: >
     💧 High Humidity Notifications & Actions
@@ -58,21 +58,20 @@
         action:
   mode: single
 
-# Automation Trigger: Runs hourly and checks humidity levels
 trigger:
+  # Runs hourly and checks humidity levels
   - platform: time
     hours: "*"
     minutes: 0
 
-# Conditions: Ensures the humidity exceeds the specified threshold
 condition:
+  # Ensures the humidity exceeds the specified threshold
   - condition: template
-    value_template: "{{ states(input.humidity_sensor) | float > input.humidity_threshold }}"
+    value_template: "{{ states(!input humidity_sensor) | float > !input humidity_threshold }}"
 
-# Actions: Send the notification and perform optional actions
 action:
+  # Choose to send notifications or perform custom actions
   - choose:
-      # Send a notification if a target is specified
       - conditions:
           - condition: template
             value_template: "{{ notify_target is defined and notify_target | length > 0 }}"
@@ -82,8 +81,6 @@ action:
             data:
               title: !input notification_title
               message: !input notification_message
-
-      # Perform custom actions if enabled
       - conditions:
           - condition: template
             value_template: "{{ include_custom_actions }}"
