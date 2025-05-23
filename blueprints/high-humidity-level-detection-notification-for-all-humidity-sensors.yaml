@@ -82,9 +82,11 @@ blueprint:
 
 variables:
   sensors: >
+    {% set threshold = input('threshold') %}
+    {% set exclude = input('exclude_sensors') or [] %}
     {% set ns = namespace(list=[]) %}
     {% for s in states.sensor | selectattr('attributes.device_class', 'eq', 'humidity') %}
-      {% if s.entity_id not in exclude_sensors and s.state|float(-1) > threshold %}
+      {% if s.entity_id not in exclude and s.state | float(-1) > threshold %}
         {% set ns.list = ns.list + [s.entity_id] %}
       {% endif %}
     {% endfor %}
@@ -96,9 +98,14 @@ trigger:
 
 condition:
   - "{{ sensors | length > 0 }}"
-  - "{{ now().strftime('%a').lower() in days }}"
+  - "{{ now().strftime('%a').lower() in input('days') }}"
 
 action:
   - service: notify.mobile_app
     data:
-      target
+      target: !input notify_device
+      message: >
+        High humidity detected in: 
+        {% for s in sensors %}
+          {{ state_attr(s, 'friendly_name') }} ({{ states(s) }}%)
+        {% endfor %}
